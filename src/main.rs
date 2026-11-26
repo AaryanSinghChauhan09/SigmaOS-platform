@@ -23,7 +23,12 @@ const MIN_CORES: usize = 2;
 const MIN_DISK_FREE_BYTES: u64 = 20 * 1024 * 1024 * 1024; // 20 GiB
 
 fn check(name: &str, ok: bool, detail: String) -> bool {
-    println!("  [{}] {} — {}", if ok { "PASS" } else { "FAIL" }, name, detail);
+    println!(
+        "  [{}] {} — {}",
+        if ok { "PASS" } else { "FAIL" },
+        name,
+        detail
+    );
     ok
 }
 
@@ -34,7 +39,11 @@ fn validate(info: &sigmaos_platform::PlatformInfo) -> bool {
     all_ok &= check(
         "memory",
         info.memory_total_kb >= MIN_MEMORY_KB,
-        format!("{} (min {} GiB)", sigmaos_platform::memory_human(info), MIN_MEMORY_KB / 1024 / 1024),
+        format!(
+            "{} (min {} GiB)",
+            sigmaos_platform::memory_human(info),
+            MIN_MEMORY_KB / 1024 / 1024
+        ),
     );
     all_ok &= check(
         "cpu cores",
@@ -49,7 +58,11 @@ fn validate(info: &sigmaos_platform::PlatformInfo) -> bool {
     all_ok &= check(
         "session",
         info.is_wayland || std::env::var("XDG_SESSION_TYPE").is_ok(),
-        if info.is_wayland { "wayland".into() } else { "x11".into() },
+        if info.is_wayland {
+            "wayland".into()
+        } else {
+            "x11".into()
+        },
     );
     all_ok &= check(
         "init",
@@ -64,7 +77,7 @@ fn validate(info: &sigmaos_platform::PlatformInfo) -> bool {
     all_ok &= check(
         "kernel",
         kernel_supported(&info.kernel_release),
-        format!("{}", info.kernel_release),
+        info.kernel_release.to_string(),
     );
 
     println!("result: {}", if all_ok { "PASS" } else { "FAIL" });
@@ -120,7 +133,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Arch:      {}", info.arch);
         println!("CPU:       {} ({} cores)", info.cpu_model, info.cpu_cores);
         println!("Memory:    {}", memory_human(&info));
-        println!("Session:   {}", if info.is_wayland { "wayland" } else { "x11" });
+        println!(
+            "Session:   {}",
+            if info.is_wayland { "wayland" } else { "x11" }
+        );
         println!("Init:      {}", info.init_system);
         println!("Hostname:  {}", info.hostname);
         println!("Uptime:    {}s", info.uptime_seconds);

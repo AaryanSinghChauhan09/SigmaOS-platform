@@ -102,9 +102,10 @@ fn init_system() -> String {
 
 /// Detect Wayland vs X11 session.
 fn is_wayland() -> bool {
-    std::env::var("WAYLAND_DISPLAY").is_ok() || std::env::var("XDG_SESSION_TYPE")
-        .map(|v| v == "wayland")
-        .unwrap_or(false)
+    std::env::var("WAYLAND_DISPLAY").is_ok()
+        || std::env::var("XDG_SESSION_TYPE")
+            .map(|v| v == "wayland")
+            .unwrap_or(false)
 }
 
 /// Uptime in seconds from /proc/uptime.
@@ -131,7 +132,9 @@ pub fn detect() -> Result<PlatformInfo, PlatformError> {
         is_wayland: is_wayland(),
         init_system: init_system(),
         hostname: read_trim(Path::new("/etc/hostname"))
-            .or_else(|_| std::env::var("HOSTNAME").map_err(|_| PlatformError::NotFound("hostname".into())))
+            .or_else(|_| {
+                std::env::var("HOSTNAME").map_err(|_| PlatformError::NotFound("hostname".into()))
+            })
             .unwrap_or_else(|_| "unknown".into()),
         uptime_seconds: uptime_seconds(),
     })
