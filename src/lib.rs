@@ -33,6 +33,9 @@ pub struct PlatformInfo {
     pub init_system: String,
     pub hostname: String,
     pub uptime_seconds: u64,
+    /// DRM kernel driver bound to the first GPU (e.g. "amdgpu", "i915",
+    /// "nouveau"), or `None` when no GPU is detected.
+    pub gpu_driver: Option<String>,
 }
 
 fn read_trim(path: &Path) -> Result<String, PlatformError> {
@@ -117,6 +120,32 @@ fn uptime_seconds() -> u64 {
         .unwrap_or(0)
 }
 
+/// DRM driver of the first GPU under /sys/class/drm (e.g. "amdgpu").
+fn gpu_driver() -> Option<String> {
+    let mut cards: Vec<_> = std::fs::read_dir("/sys/class/drm")
+        .ok()?
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with("card") && !n.contains('-'))
+        .collect();
+    cards.sort();
+    for card in cards {
+        let uevent = Path::new("/sys/class/drm")
+            .join(&card)
+            .join("device/uevent");
+        if let Ok(text) = std::fs::read_to_string(uevent) {
+            for line in text.lines() {
+                if let Some(v) = line.strip_prefix("DRIVER=") {
+                    if !v.is_empty() {
+                        return Some(v.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 /// Gather full platform info.
 pub fn detect() -> Result<PlatformInfo, PlatformError> {
     let (os_name, os_version) = os_release();
@@ -137,6 +166,7 @@ pub fn detect() -> Result<PlatformInfo, PlatformError> {
             })
             .unwrap_or_else(|_| "unknown".into()),
         uptime_seconds: uptime_seconds(),
+        gpu_driver: gpu_driver(),
     })
 }
 
@@ -156,4 +186,38 @@ pub fn cpu_feature(feature: &str) -> bool {
 pub fn memory_human(info: &PlatformInfo) -> String {
     let gib = info.memory_total_kb as f64 / 1024.0 / 1024.0;
     format!("{gib:.1} GiB")
+}
+
+/// SigmaOS targets kernel >= 6.1 LTS.
+pub fn kernel_supported(release: &str) -> bool {
+    let mut parts = release.split('.');
+    let major = parts.next().and_then(|v| v.parse::<u32>().ok());
+    let minor = parts.next().and_then(|v| v.parse::<u32>().ok());
+    match (major, minor) {
+        (Some(maj), Some(min)) => maj > 6 || (maj == 6 && min >= 1),
+        (Some(maj), None) => maj > 6,
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kernel_support_boundary() {
+        assert!(!kernel_supported("6.0.21"));
+        assert!(kernel_supported("6.1.0"));
+        assert!(kernel_supported("6.12.1"));
+        assert!(kernel_supported("7.0"));
+        assert!(!kernel_supported("5.15.0"));
+        assert!(!kernel_supported("garbage"));
+    }
+
+    #[test]
+    fn detect_returns_platform_info() {
+        let info = detect().unwrap();
+        assert!(!info.kernel_release.is_empty());
+        assert!(info.cpu_cores > 0 || cfg!(target_os = "unknown"));
+    }
 }

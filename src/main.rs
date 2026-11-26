@@ -1,7 +1,7 @@
 //! CLI for sigmaos-platform.
 
 use clap::Parser;
-use sigmaos_platform::{cpu_feature, detect, memory_human};
+use sigmaos_platform::{cpu_feature, detect, kernel_supported, memory_human};
 
 #[derive(Parser)]
 #[command(name = "sigmaos-platform", about = "SigmaOS platform detection")]
@@ -102,16 +102,6 @@ fn human_bytes(b: u64) -> String {
     format!("{gib:.1} GiB")
 }
 
-/// SigmaOS targets kernel >= 6.1 LTS.
-fn kernel_supported(release: &str) -> bool {
-    release
-        .split('.')
-        .next()
-        .and_then(|v| v.parse::<u32>().ok())
-        .map(|major| major >= 6)
-        .unwrap_or(false)
-}
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     let cli = Cli::parse();
@@ -138,6 +128,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if info.is_wayland { "wayland" } else { "x11" }
         );
         println!("Init:      {}", info.init_system);
+        if let Some(gpu) = &info.gpu_driver {
+            println!("GPU:       {gpu}");
+        }
         println!("Hostname:  {}", info.hostname);
         println!("Uptime:    {}s", info.uptime_seconds);
     }
