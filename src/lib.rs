@@ -212,6 +212,45 @@ mod tests {
         assert!(kernel_supported("7.0"));
         assert!(!kernel_supported("5.15.0"));
         assert!(!kernel_supported("garbage"));
+        assert!(kernel_supported("6.1"));
+        assert!(kernel_supported("10.0.1"));
+        assert!(!kernel_supported("6"));
+        assert!(!kernel_supported(""));
+    }
+
+    #[test]
+    fn memory_human_formats_gib() {
+        let mk = |kb: u64| PlatformInfo {
+            os_name: String::new(),
+            os_version: String::new(),
+            kernel_release: String::new(),
+            arch: String::new(),
+            cpu_model: String::new(),
+            cpu_cores: 0,
+            memory_total_kb: kb,
+            is_wayland: false,
+            init_system: String::new(),
+            hostname: String::new(),
+            uptime_seconds: 0,
+            gpu_driver: None,
+        };
+        assert_eq!(memory_human(&mk(8 * 1024 * 1024)), "8.0 GiB");
+        assert_eq!(memory_human(&mk(512 * 1024)), "0.5 GiB");
+        assert_eq!(memory_human(&mk(1024 * 1024 * 16)), "16.0 GiB");
+    }
+
+    #[test]
+    fn cpu_feature_agrees_with_cpuinfo() {
+        // Host-dependent result; verify it matches a manual scan.
+        let manual = std::fs::read_to_string("/proc/cpuinfo")
+            .map(|t| {
+                t.lines()
+                    .find(|l| l.starts_with("flags") || l.starts_with("Features"))
+                    .map(|l| l.split_whitespace().any(|w| w == "avx2"))
+                    .unwrap_or(false)
+            })
+            .unwrap_or(false);
+        assert_eq!(cpu_feature("avx2"), manual);
     }
 
     #[test]
