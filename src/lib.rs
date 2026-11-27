@@ -148,38 +148,59 @@ fn gpu_driver() -> Option<String> {
 
 /// Gather full platform info.
 pub fn detect() -> Result<PlatformInfo, PlatformError> {
+    log::info!("Detecting platform hardware and OS capabilities");
     let (os_name, os_version) = os_release();
-    Ok(PlatformInfo {
+    let kernel_release = read_trim(Path::new("/proc/sys/kernel/osrelease")).unwrap_or_else(|e| {
+        log::warn!("Could not read kernel release: {}", e);
+        "unknown".into()
+    });
+    let hostname = read_trim(Path::new("/etc/hostname"))
+        .or_else(|_| {
+            std::env::var("HOSTNAME").map_err(|_| PlatformError::NotFound("hostname".into()))
+        })
+        .unwrap_or_else(|e| {
+            log::warn!("Could not determine hostname: {}", e);
+            "unknown".into()
+        });
+    let info = PlatformInfo {
         os_name,
         os_version,
-        kernel_release: read_trim(Path::new("/proc/sys/kernel/osrelease"))
-            .unwrap_or_else(|_| "unknown".into()),
+        kernel_release,
         arch: std::env::consts::ARCH.to_string(),
         cpu_model: cpu_model(),
         cpu_cores: cpu_cores(),
         memory_total_kb: memory_total_kb(),
         is_wayland: is_wayland(),
         init_system: init_system(),
-        hostname: read_trim(Path::new("/etc/hostname"))
-            .or_else(|_| {
-                std::env::var("HOSTNAME").map_err(|_| PlatformError::NotFound("hostname".into()))
-            })
-            .unwrap_or_else(|_| "unknown".into()),
+        hostname,
         uptime_seconds: uptime_seconds(),
         gpu_driver: gpu_driver(),
-    })
+    };
+    log::info!(
+        "Platform detected: {} {} ({}, {} cores, init={})",
+        info.os_name,
+        info.os_version,
+        info.arch,
+        info.cpu_cores,
+        info.init_system
+    );
+    Ok(info)
 }
 
 /// Check whether a CPU feature flag is present (e.g. "avx2").
 pub fn cpu_feature(feature: &str) -> bool {
-    std::fs::read_to_string("/proc/cpuinfo")
-        .map(|t| {
-            t.lines()
-                .find(|l| l.starts_with("flags") || l.starts_with("Features"))
-                .map(|l| l.split_whitespace().any(|w| w == feature))
-                .unwrap_or(false)
-        })
-        .unwrap_or(false)
+    log::info!("Checking CPU feature flag: {}", feature);
+    match std::fs::read_to_string("/proc/cpuinfo") {
+        Ok(t) => t
+            .lines()
+            .find(|l| l.starts_with("flags") || l.starts_with("Features"))
+            .map(|l| l.split_whitespace().any(|w| w == feature))
+            .unwrap_or(false),
+        Err(e) => {
+            log::error!("Failed to read /proc/cpuinfo: {}", e);
+            false
+        }
+    }
 }
 
 /// Total memory formatted as human-readable string.
